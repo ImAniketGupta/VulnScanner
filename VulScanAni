@@ -50,7 +50,7 @@ class WebCrawler:
             print(url)
         return list(self.visited_urls)
 
-class ZAPScanner:
+class AGVulScanner:
     def __init__(self, urls):
         self.urls = urls
         # Initialize ZAP without an API key
@@ -168,7 +168,7 @@ def main():
         return
 
     # Run the vulnerability scanner on the gathered URLs
-    scanner = ZAPScanner(urls_to_scan)
+    scanner = AGVulScanner(urls_to_scan)
     scanner.start_scan()
 
 if __name__ == "__main__":
