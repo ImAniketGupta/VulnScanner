@@ -51,11 +51,13 @@ class WebCrawler:
         return list(self.visited_urls)
 
 class AGVulScanner:
-    def __init__(self, urls):
+    def __init__(self, urls, app_name):
         self.urls = urls
-        # Initialize ZAP without an API key
+        self.app_name = app_name  # Save the application name for the report file
+        # Initialize ZAP 
         self.zap = ZAPv2(proxies={'http': 'http://localhost:8080', 'https': 'http://localhost:8080'})
         self.report_data = {}
+        self.vulnerability_counts = {}
 
     def test_connection(self):
         try:
@@ -96,15 +98,39 @@ class AGVulScanner:
                 } for alert in alerts
             ]
             print(f"[+] ZAP scan completed for {target}.")
+            self.count_vulnerabilities(alerts)  # Update vulnerability counts
         else:
             print(f"[-] Scan did not complete for {target} due to timeout.")
+    
+    def count_vulnerabilities(self, alerts):
+        # Count vulnerabilities based on type and severity
+        for alert in alerts:
+            alert_type = alert['alert']
+            risk_level = alert['risk']
+
+            # Initialize counters if they don't exist
+            if alert_type not in self.vulnerability_counts:
+                self.vulnerability_counts[alert_type] = {'Low': 0, 'Medium': 0, 'High': 0}
+
+            if risk_level == 'Low':
+                self.vulnerability_counts[alert_type]['Low'] += 1
+            elif risk_level == 'Medium':
+                self.vulnerability_counts[alert_type]['Medium'] += 1
+            elif risk_level == 'High':
+                self.vulnerability_counts[alert_type]['High'] += 1
 
     def generate_pdf_report(self):
+    	# Save the report with the application name in the file name
+        report_filename = f"{self.app_name}_vulnerability_report.pdf"
         pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        
+        # First Page: Large and bold application name
         pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(200, 10, "Web Vulnerability Report", 0, 1, "C")
+        pdf.set_font("Arial", "B", 20)
+        pdf.cell(200, 10, f"{self.app_name} - Web Vulnerability Report", 0, 1, "C")
         pdf.set_font("Arial", "", 12)
+        pdf.ln(10)
 
         for target, alerts in self.report_data.items():
             pdf.cell(200, 10, f"Target: {target}", 0, 1)
@@ -117,9 +143,29 @@ class AGVulScanner:
                 pdf.multi_cell(0, 8, f"URL: {alert['url']}")
                 pdf.multi_cell(0, 8, f"Solution: {alert['solution']}")
                 pdf.ln(10)
+                
+        # Start new page for vulnerability counts and summaries
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 14)
+        pdf.cell(200, 10, "Vulnerability Counts by Type and Severity", 0, 1, "C")
+        pdf.ln(5)
 
-        pdf.output("vulnerability_report.pdf")
-        print("\nPDF report generated: vulnerability_report.pdf")
+        # Add vulnerability count data
+        for alert_type, severity_counts in self.vulnerability_counts.items():
+            pdf.cell(0, 10, f"Vulnerability Type: {alert_type}", 0, 1)
+            for severity, count in severity_counts.items():
+                pdf.cell(0, 10, f"{severity} Severity: {count}", 0, 1)
+            pdf.ln(5)
+
+        # Subsequent pages: Small application name in header and footer
+        pdf.alias_nb_pages()
+        pdf.add_page()
+        pdf.set_font("Arial", "I", 10)  # Smaller font for header and footer
+        pdf.cell(200, 10, f"{self.app_name}", 0, 1, "C")
+        pdf.ln(5)
+        
+        pdf.output(report_filename)
+        print(f"\nPDF report generated: {report_filename}")
 
     def prepare_text_for_pdf(self, data):
         # Convert text to a printable format for fpdf (handles Unicode issues)
@@ -139,6 +185,7 @@ class AGVulScanner:
         self.generate_pdf_report()
 
 def main():
+    app_name = input("Enter the application name: ")  # Ask for the application name
     print("Choose an option:")
     print("1. Enter a base URL to crawl the entire site.")
     print("2. Provide a list of URLs to visit individually.")
@@ -168,7 +215,7 @@ def main():
         return
 
     # Run the vulnerability scanner on the gathered URLs
-    scanner = AGVulScanner(urls_to_scan)
+    scanner = AGVulScanner(urls_to_scan, app_name)
     scanner.start_scan()
 
 if __name__ == "__main__":
